@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}AI Medicine Search - MediConnect{% endblock %}
+
+{% block extra_css %}
+<style>
+    .suggestion-card {
+        border-left: 4px solid var(--primary-color);
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        margin-bottom: 1rem;
+        transition: var(--transition);
+    }
+
+    .suggestion-card:hover {
+        transform: translateX(5px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .medicine-card {
+        border-radius: var(--border-radius);
+        transition: var(--transition);
+        cursor: pointer;
+    }
+
+    .medicine-card:hover {
+        border-color: var(--primary-color);
+        box-shadow: var(--shadow-md);
+    }
+
+    .availability-badge {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+
+    .similarity-score {
+        background: linear-gradient(135deg, var(--secondary-color) 0%, #0891b2 100%);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+
+    .search-form {
+        background: white;
+        padding: 2rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-md);
+        margin-bottom: 2rem;
+    }
+
+    .ai-suggestions {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-radius: var(--border-radius);
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .alternative-medicine {
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        transition: var(--transition);
+    }
+
+    .alternative-medicine:hover {
+        border-color: var(--primary-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="text-gradient">
+                    <i class="fas fa-robot"></i> AI Medicine Search
+                </h1>
+                <a href="{{ url_for('medicine_search') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Basic Search
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Form -->
+    <div class="row">
+        <div class="col-12">
+            <div class="search-form">
+                <form method="GET" action="{{ url_for('medicine_search_ai') }}">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label for="medicine_id" class="form-label">
+                                <i class="fas fa-pills"></i> Select Medicine
+                            </label>
+                            <select name="medicine_id" id="medicine_id" class="form-control" required>
+                                <option value="">Choose a medicine...</option>
+                                {% for medicine in medicines %}
+                                <option value="{{ medicine.id }}" 
+                                    {% if request.args.get('medicine_id') == medicine.id|string %}selected{% endif %}>
+                                    {{ medicine.name }} 
+                                    {% if medicine.strength %}({{ medicine.strength }}){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="location_id" class="form-label">
+                                <i class="fas fa-map-marker-alt"></i> Location
+                            </label>
+                            <select name="location_id" id="location_id" class="form-control" required>
+                                <option value="">Choose location...</option>
+                                {% for location in locations %}
+                                <option value="{{ location.id }}" 
+                                    {% if request.args.get('location_id') == location.id|string %}selected{% endif %}>
+                                    {{ location.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading-spinner">
+        <div class="spinner mx-auto"></div>
+        <p class="mt-3">Searching for medicines and alternatives...</p>
+    </div>
+
+    <!-- Search Results -->
+    {% if search_results %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title">
+                        <i class="fas fa-check-circle text-success"></i> 
+                        Medicine Available ({{ search_results|length }} pharmacy(s))
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for result in search_results %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card medicine-card h-100 position-relative">
+                                <div class="availability-badge">
+                                    <span class="badge badge-success">
+                                        <i class="fas fa-check"></i> In Stock
+                                    </span>
+                                </div>
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ result.pharmacy_name }}</h5>
+                                    <p class="card-text">
+                                        <i class="fas fa-map-marker-alt"></i> {{ result.address }}<br>
+                                        <i class="fas fa-phone"></i> {{ result.phone }}<br>
+                                        <i class="fas fa-map-pin"></i> {{ result.location_name }}
+                                    </p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong class="text-primary">₹{{ result.unit_price }}</strong>
+                                            {% if result.mrp %}
+                                            <small class="text-muted">
+                                                <del>₹{{ result.mrp }}</del>
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                        <span class="badge badge-primary">
+                                            {{ result.current_stock }} units
+                                        </span>
+                                    </div>
+                                    {% if result.batch_number %}
+                                    <small class="text-muted">
+                                        Batch: {{ result.batch_number }}
+                                        {% if result.expiry_date %}
+                                        | Expires: {{ result.expiry_date }}
+                                        {% endif %}
+                                    </small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif request.args.get('medicine_id') and request.args.get('location_id') %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body no-results">
+                    <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
+                    <h4>Medicine Not Available</h4>
+                    <p class="text-muted">The selected medicine is not available in the chosen location.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AI Suggestions -->
+    {% if suggestions %}
+    <div class="row">
+        <div class="col-12">
+            <div class="ai-suggestions">
+                <h3 class="text-primary mb-3">
+                    <i class="fas fa-lightbulb"></i> AI Suggestions
+                </h3>
+
+                {% if suggestions.category %}
+                <div class="mb-3">
+                    <p><strong>Category:</strong> {{ suggestions.category|title }}</p>
+                    {% if suggestions.active_ingredient %}
+                    <p><strong>Active Ingredient:</strong> {{ suggestions.active_ingredient|title }}</p>
+                    {% endif %}
+                    {% if suggestions.uses %}
+                    <p><strong>Uses:</strong> {{ suggestions.uses|title }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if suggestions.exact_matches %}
+                <div class="mb-4">
+                    <h5><i class="fas fa-exchange-alt"></i> Alternative Brands</h5>
+                    <div class="row">
+                        {% for alternative in suggestions.exact_matches %}
+                        <div class="col-md-4 mb-2">
+                            <div class="alternative-medicine">
+                                <strong>{{ alternative|title }}</strong>
+                                <button class="btn btn-sm btn-outline-primary float-end" 
+                                        onclick="searchAlternative('{{ alternative }}')">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if suggestions.similar_medicines %}
+                <div class="mb-4">
+                    <h5><i class="fas fa-pills"></i> Similar Medicines</h5>
+                    <div class="row">
+                        {% for medicine in suggestions.similar_medicines %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card suggestion-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="card-title">{{ medicine.name }}</h6>
+                                            {% if medicine.generic_name %}
+                                            <small class="text-muted">Generic: {{ medicine.generic_name }}</small><br>
+                                            {% endif %}
+                                            {% if medicine.brand_name %}
+                                            <small class="text-muted">Brand: {{ medicine.brand_name }}</small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="similarity-score">{{ medicine.similarity }}% match</span>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <button class="btn btn-sm btn-primary" 
+                                                onclick="searchMedicine({{ medicine.id }})">
+                                            <i class="fas fa-search"></i> Check Availability
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if suggestions.availability_info %}
+                <div class="mb-4">
+                    <h5><i class="fas fa-store"></i> Alternative Availability</h5>
+                    {% for info in suggestions.availability_info %}
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                {{ info.medicine.name }}
+                                {% if info.in_stock %}
+                                <span class="badge badge-success float-end">Available</span>
+                                {% else %}
+                                <span class="badge badge-danger float-end">Out of Stock</span>
+                                {% endif %}
+                            </h6>
+                        </div>
+                        {% if info.availability %}
+                        <div class="card-body">
+                            <div class="row">
+                                {% for pharmacy in info.availability %}
+                                <div class="col-md-4 mb-2">
+                                    <div class="card">
+                                        <div class="card-body p-3">
+                                            <h6 class="card-title">{{ pharmacy.pharmacy_name }}</h6>
+                                            <p class="card-text small">
+                                                <i class="fas fa-map-marker-alt"></i> {{ pharmacy.location_name }}<br>
+                                                <i class="fas fa-phone"></i> {{ pharmacy.phone }}
+                                            </p>
+                                            <div class="d-flex justify-content-between">
+                                                <strong class="text-primary">₹{{ pharmacy.unit_price }}</strong>
+                                                <span class="badge badge-primary">{{ pharmacy.current_stock }} units</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Note:</strong> These suggestions are AI-generated based on medicine similarities and availability. 
+                    Always consult with a healthcare professional before switching medications.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function searchAlternative(medicineName) {
+        // Show loading
+        document.getElementById('loading').style.display = 'block';
+        
+        // Find medicine ID by name (you might need to implement this)
+        fetch('/api/medicine-suggestions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                medicine_name: medicineName,
+                location_id: document.getElementById('location_id').value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Alternative suggestions:', data);
+            // You can update the UI with new suggestions
+            document.getElementById('loading').style.display = 'none';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('loading').style.display = 'none';
+        });
+    }
+
+    function searchMedicine(medicineId) {
+        const locationId = document.getElementById('location_id').value;
+        if (!locationId) {
+            alert('Please select a location first');
+            return;
+        }
+        
+        // Redirect to search with the selected medicine
+        window.location.href = `{{ url_for('medicine_search_ai') }}?medicine_id=${medicineId}&location_id=${locationId}`;
+    }
+
+    // Enhanced form submission with loading
+    document.querySelector('form').addEventListener('submit', function() {
+        document.getElementById('loading').style.display = 'block';
+    });
+
+    // Auto-complete for medicine selection
+    document.addEventListener('DOMContentLoaded', function() {
+        const medicineSelect = document.getElementById('medicine_id');
+        const locationSelect = document.getElementById('location_id');
+        
+        // You can add autocomplete functionality here
+        medicineSelect.addEventListener('change', function() {
+            if (this.value && locationSelect.value) {
+                // Auto-submit form or provide instant suggestions
+            }
+        });
+    });
+</script>
+{% endblock %}

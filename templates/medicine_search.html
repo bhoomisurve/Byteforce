@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block title %}Medicine Search - MediConnect{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border: none;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    .medicine-result {
+        transition: all 0.3s ease;
+        border-left: 4px solid var(--success-color);
+    }
+    
+    .medicine-result:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .substitute-section {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        border: 2px solid #ff9800;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .substitute-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .substitute-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    
+    .ai-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .substitute-type {
+        background: var(--secondary-color);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+    }
+    
+    .similarity-score {
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+    
+    .stock-badge {
+        background: var(--success-color);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+    }
+    
+    .price-tag {
+        background: var(--warning-color);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+    
+    .search-form {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="text-gradient mb-4">
+                <i class="fas fa-search"></i> Medicine Search
+            </h1>
+        </div>
+    </div>
+
+    <!-- Search Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="search-form">
+                <form method="GET" action="{{ url_for('medicine_search') }}">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label for="medicine_id" class="form-label">
+                                <i class="fas fa-pills"></i> Select Medicine
+                            </label>
+                            <select name="medicine_id" id="medicine_id" class="form-control" required>
+                                <option value="">Choose a medicine...</option>
+                                {% for medicine in medicines %}
+                                <option value="{{ medicine.id }}" 
+                                    {% if request.args.get('medicine_id') == medicine.id|string %}selected{% endif %}>
+                                    {{ medicine.name }}
+                                    {% if medicine.generic_name %} - {{ medicine.generic_name }}{% endif %}
+                                    {% if medicine.strength %} ({{ medicine.strength }}){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="location_id" class="form-label">
+                                <i class="fas fa-map-marker-alt"></i> Select Location
+                            </label>
+                            <select name="location_id" id="location_id" class="form-control" required>
+                                <option value="">Choose a location...</option>
+                                {% for location in locations %}
+                                <option value="{{ location.id }}" 
+                                    {% if request.args.get('location_id') == location.id|string %}selected{% endif %}>
+                                    {{ location.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {% if search_results %}
+    <div class="row">
+        <div class="col-12">
+            <h3 class="mb-3">
+                <i class="fas fa-check-circle text-success"></i> Available in Stock
+                <span class="badge badge-success">{{ search_results|length }} Found</span>
+            </h3>
+            
+            {% for result in search_results %}
+            <div class="card medicine-result mb-3">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h5 class="mb-1">{{ result.pharmacy_name }}</h5>
+                            <p class="text-muted mb-1">
+                                <i class="fas fa-map-marker-alt"></i> {{ result.address }}
+                            </p>
+                            <p class="text-muted mb-0">
+                                <i class="fas fa-phone"></i> {{ result.phone }}
+                            </p>
+                        </div>
+                        <div class="col-md-3">
+                            <p class="mb-1"><strong>Medicine:</strong> {{ result.medicine_name }}</p>
+                            <p class="mb-1"><strong>Strength:</strong> {{ result.strength }}</p>
+                            <p class="mb-0"><strong>Form:</strong> {{ result.dosage_form }}</p>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <div class="stock-badge mb-2">
+                                <i class="fas fa-boxes"></i> Stock: {{ result.current_stock }}
+                            </div>
+                            <div class="price-tag">
+                                <i class="fas fa-rupee-sign"></i> ₹{{ result.unit_price }}
+                            </div>
+                            <small class="text-muted d-block">MRP: ₹{{ result.mrp }}</small>
+                            {% if result.batch_number %}
+                            <small class="text-muted d-block">Batch: {{ result.batch_number }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AI Substitutes Section -->
+    {% if substitutes %}
+    <div class="substitute-section">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>
+                <i class="fas fa-robot"></i> AI-Suggested Substitutes
+                <span class="ai-badge">{{ substitutes|length }} Found</span>
+            </h3>
+            {% if request.args.get('medicine_id') %}
+            <a href="{{ url_for('medicine_substitutes', medicine_id=request.args.get('medicine_id')) }}?location_id={{ request.args.get('location_id') }}" 
+               class="btn btn-primary">
+                <i class="fas fa-eye"></i> View All Substitutes
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="row">
+            {% for substitute in substitutes %}
+            <div class="col-md-6 mb-3">
+                <div class="substitute-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="mb-1">{{ substitute.medicine.name }}</h6>
+                            <span class="substitute-type">{{ substitute.substitute_type }}</span>
+                        </div>
+                        <div class="similarity-score">
+                            {{ (substitute.substitute_score * 100)|round(0)|int }}%
+                        </div>
+                    </div>
+                    
+                    <p class="mb-1"><strong>Generic:</strong> {{ substitute.medicine.generic_name or 'N/A' }}</p>
+                    <p class="mb-1"><strong>Strength:</strong> {{ substitute.medicine.strength or 'N/A' }}</p>
+                    
+                    {% if substitute.availability %}
+                    <div class="mt-2">
+                        <small class="text-success">
+                            <i class="fas fa-check-circle"></i> Available at {{ substitute.availability|length }} pharmacy(s)
+                        </small>
+                        <br>
+                        <small class="text-muted">
+                            From ₹{{ substitute.availability[0].unit_price }}
+                        </small>
+                    </div>
+                    {% else %}
+                    <small class="text-muted">
+                        <i class="fas fa-times-circle"></i> No current availability
+                    </small>
+                    {% endif %}
+                    
+                    {% if substitute.safety_notes %}
+                    <div class="mt-2">
+                        <small class="text-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            {{ substitute.safety_notes|length }} safety note(s)
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- No Results Message -->
+    {% if request.args.get('medicine_id') and request.args.get('location_id') and not search_results and not substitutes %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body no-results">
+                    <i class="fas fa-search fa-3x mb-3"></i>
+                    <h4>No Results Found</h4>
+                    <p>We couldn't find this medicine in stock at the selected location, and our AI couldn't suggest suitable substitutes.</p>
+                    <div class="mt-3">
+                        <a href="{{ url_for('chatbot') }}" class="btn btn-primary me-2">
+                            <i class="fas fa-robot"></i> Ask AI Assistant
+                        </a>
+                        <a href="{{ url_for('report_medicine') }}" class="btn btn-secondary">
+                            <i class="fas fa-plus-circle"></i> Report Medicine Need
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- How It Works Section -->
+    {% if not request.args.get('medicine_id') %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="text-center mb-4">
+                        <i class="fas fa-magic"></i> How AI Substitutes Work
+                    </h4>
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-brain fa-2x text-primary mb-3"></i>
+                            <h6>AI Analysis</h6>
+                            <p class="text-muted">Our AI analyzes medicine properties, generic names, and therapeutic classes</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-balance-scale fa-2x text-success mb-3"></i>
+                            <h6>Similarity Matching</h6>
+                            <p class="text-muted">Calculates similarity scores based on active ingredients and effects</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-shield-alt fa-2x text-warning mb-3"></i>
+                            <h6>Safety Check</h6>
+                            <p class="text-muted">Provides safety notes and warnings for different substitutes</p>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <i class="fas fa-user-md fa-2x text-info mb-3"></i>
+                            <h6>Medical Advice</h6>
+                            <p class="text-muted">Always recommends consulting healthcare providers</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add search functionality to select dropdowns
+    const medicineSelect = document.getElementById('medicine_id');
+    const locationSelect = document.getElementById('location_id');
+    
+    // Make selects searchable (you can add a library like Select2 for better UX)
+    function addSearchToSelect(selectElement) {
+        selectElement.addEventListener('keyup', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const options = selectElement.options;
+            
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                const text = option.text.toLowerCase();
+                
+                if (text.includes(searchTerm) || searchTerm === '') {
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    // Animate cards on load
+    const cards = document.querySelectorAll('.medicine-result, .substitute-card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Add loading state to search button
+    const searchForm = document.querySelector('form');
+    const searchButton = document.querySelector('button[type="submit"]');
+    
+    if (searchForm && searchButton) {
+        searchForm.addEventListener('submit', function() {
+            searchButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+            searchButton.disabled = true;
+        });
+    }
+});
+</script>
+{% endblock %}
