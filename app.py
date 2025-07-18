@@ -434,27 +434,160 @@ def medicine_search():
     locations = execute_query('SELECT * FROM locations ORDER BY name')
     
     search_results = []
+    debug_info = {}
+    
     if request.args.get('medicine_id') and request.args.get('location_id'):
         medicine_id = request.args.get('medicine_id')
         location_id = request.args.get('location_id')
         
-        # Search for medicine availability
-        search_results = execute_query('''
-            SELECT p.pharmacy_name, p.address, p.phone, pi.current_stock, 
-                   pi.unit_price, pi.mrp, pi.batch_number, pi.expiry_date,
-                   m.name as medicine_name, m.strength, m.dosage_form
+        # First, let's check what data we have
+        debug_info['medicine_id'] = medicine_id
+        debug_info['location_id'] = location_id
+        
+        # Check if there's any inventory for this medicine at all
+        all_inventory = execute_query('''
+            SELECT pi.*, p.pharmacy_name, p.location_id, l.name as location_name, m.name as medicine_name
             FROM pharmacy_inventory pi
             JOIN pharmacies p ON pi.pharmacy_id = p.id
             JOIN medicines m ON pi.medicine_id = m.id
+            JOIN locations l ON p.location_id = l.id
+            WHERE pi.medicine_id = ?
+        ''', (medicine_id,))
+        
+        debug_info['total_inventory_for_medicine'] = len(all_inventory) if all_inventory else 0
+        
+        # Try the main search query
+        search_results = execute_query('''
+            SELECT p.pharmacy_name, p.address, p.phone, pi.current_stock, 
+                   pi.unit_price, pi.mrp, pi.batch_number, pi.expiry_date,
+                   m.name as medicine_name, m.strength, m.dosage_form,
+                   l.name as location_name
+            FROM pharmacy_inventory pi
+            JOIN pharmacies p ON pi.pharmacy_id = p.id
+            JOIN medicines m ON pi.medicine_id = m.id
+            JOIN locations l ON p.location_id = l.id
             WHERE pi.medicine_id = ? AND p.location_id = ? AND pi.current_stock > 0
             ORDER BY pi.unit_price ASC
         ''', (medicine_id, location_id))
+        
+        # If no results, try without stock filter
+        if not search_results:
+            search_results = execute_query('''
+                SELECT p.pharmacy_name, p.address, p.phone, pi.current_stock, 
+                       pi.unit_price, pi.mrp, pi.batch_number, pi.expiry_date,
+                       m.name as medicine_name, m.strength, m.dosage_form,
+                       l.name as location_name
+                FROM pharmacy_inventory pi
+                JOIN pharmacies p ON pi.pharmacy_id = p.id
+                JOIN medicines m ON pi.medicine_id = m.id
+                JOIN locations l ON p.location_id = l.id
+                WHERE pi.medicine_id = ? AND p.location_id = ?
+                ORDER BY pi.unit_price ASC
+            ''', (medicine_id, location_id))
+            
+            if search_results:
+                debug_info['note'] = "Found results but with zero stock"
+        
+        # If still no results, search all locations
+        if not search_results:
+            search_results = execute_query('''
+                SELECT p.pharmacy_name, p.address, p.phone, pi.current_stock, 
+                       pi.unit_price, pi.mrp, pi.batch_number, pi.expiry_date,
+                       m.name as medicine_name, m.strength, m.dosage_form,
+                       l.name as location_name
+                FROM pharmacy_inventory pi
+                JOIN pharmacies p ON pi.pharmacy_id = p.id
+                JOIN medicines m ON pi.medicine_id = m.id
+                JOIN locations l ON p.location_id = l.id
+                WHERE pi.medicine_id = ?
+                ORDER BY pi.unit_price ASC
+                LIMIT 10
+            ''', (medicine_id,))
+            
+            if search_results:
+                debug_info['note'] = "Found results in other locations"
     
     return render_template('medicine_search.html', 
                          medicines=medicines, 
                          locations=locations,
-                         search_results=search_results)
+                         search_results=search_results,
+                         debug_info=debug_info if app.debug else None)
 
+# Alternative more robust search endpoint
+@app.route('/api/search-medicine', methods=['POST'])
+def api_search_medicine():
+    """API endpoint for medicine search with better error handling"""
+    data = request.get_json()
+    medicine_id = data.get('medicine_id')
+    location_id = data.get('location_id')
+    
+    if not medicine_id:
+        return jsonify({'error': 'Medicine ID is required'}), 400
+    
+    # Base query without location filter
+    base_query = '''
+        SELECT p.pharmacy_name, p.address, p.phone, pi.current_stock, 
+               pi.unit_price, pi.mrp, pi.batch_number, pi.expiry_date,
+               m.name as medicine_name, m.strength, m.dosage_form,
+               l.name as location_name, l.id as location_id
+        FROM pharmacy_inventory pi
+        JOIN pharmacies p ON pi.pharmacy_id = p.id
+        JOIN medicines m ON pi.medicine_id = m.id
+        JOIN locations l ON p.location_id = l.id
+        WHERE pi.medicine_id = ? AND pi.current_stock > 0
+    '''
+    
+    params = [medicine_id]
+    
+    # Add location filter if provided
+    if location_id:
+        base_query += ' AND p.location_id = ?'
+        params.append(location_id)
+    
+    base_query += ' ORDER BY pi.unit_price ASC'
+    
+    results = execute_query(base_query, params)
+    
+    return jsonify({
+        'results': [dict(row) for row in results] if results else [],
+        'count': len(results) if results else 0
+    })
+
+# Debug route to check data
+@app.route('/debug/medicine-data')
+@login_required
+@role_required(['admin'])
+def debug_medicine_data():
+    """Debug route to check medicine and pharmacy data"""
+    medicines_count = execute_query('SELECT COUNT(*) as count FROM medicines')[0]['count']
+    pharmacies_count = execute_query('SELECT COUNT(*) as count FROM pharmacies')[0]['count']
+    inventory_count = execute_query('SELECT COUNT(*) as count FROM pharmacy_inventory')[0]['count']
+    locations_count = execute_query('SELECT COUNT(*) as count FROM locations')[0]['count']
+    
+    # Sample data
+    sample_medicines = execute_query('SELECT * FROM medicines LIMIT 5')
+    sample_pharmacies = execute_query('SELECT * FROM pharmacies LIMIT 5')
+    sample_inventory = execute_query('''
+        SELECT pi.*, m.name as medicine_name, p.pharmacy_name
+        FROM pharmacy_inventory pi
+        JOIN medicines m ON pi.medicine_id = m.id
+        JOIN pharmacies p ON pi.pharmacy_id = p.id
+        LIMIT 10
+    ''')
+    
+    return jsonify({
+        'counts': {
+            'medicines': medicines_count,
+            'pharmacies': pharmacies_count,
+            'inventory': inventory_count,
+            'locations': locations_count
+        },
+        'samples': {
+            'medicines': [dict(row) for row in sample_medicines],
+            'pharmacies': [dict(row) for row in sample_pharmacies],
+            'inventory': [dict(row) for row in sample_inventory]
+        }
+    })
 @app.route('/alerts')
 @login_required
 def view_alerts():
