@@ -23,31 +23,31 @@ An integrated **Web3 + AI Healthcare System** built with **Flask**, **Ethereum B
 ## 📸 UI Screenshots
 
 ### 🌐 Landing Page
-![Landing Page](index1.png)
+![Landing Page](images/index1.png)
 
-### 🔗 Blockchain Logs
-![Blockchain View 1](BC1.png)
-![Blockchain View 2](BC2.png)
+### 📦 Inventory Dashboard
+![Inventory Dashboard](images/index2.png)
 
-### 🧠 ML Shortage Prediction
-![ML Prediction](predict_medi.png)
+### 📊 Admin or Analytics Panel
+![Admin Panel](images/index3.png)
+
+### 🔗 Blockchain Logs - View 1
+![Blockchain Logs 1](images/BC1.png)
+
+### 🔗 Blockchain Logs - View 2
+![Blockchain Logs 2](images/BC2.png)
+
+### 🧠 ML Medicine Shortage Prediction
+![Prediction System](images/predict_medi.png)
 
 ### 💊 Alternative Medicine Suggestion
-![Alternative Medicine](alternatemedi.png)
+![Alternative Medicines](images/alternatemedi.png)
 
-### 📍 Pharmacy Locator with Maps
-![Pharmacy Locator](pharmacylocator.png)
+### 📍 Nearby Pharmacy Locator
+![Pharmacy Locator](images/pharmacylocator.png)
 
-### 🚨 Shortage Reporting Panel
-![Shortage Reporting](shortage.png)
-
-### 📦 Inventory Dashboard & Admin View
-![Inventory Overview](index2.png)
-![Analytics Dashboard](index3.png)
-
-### ⚙️ System Backend Architecture
-![System Architecture 1](base1.png)
-![System Architecture 2](base2.png)
+### 🚨 Patient Shortage Report
+![Shortage Report](images/shortage.png)
 
 ---
 
